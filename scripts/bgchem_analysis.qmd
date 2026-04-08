@@ -1,0 +1,65 @@
+---
+title: "Untitled"
+format: html
+---
+
+# Introduction
+
+This report was last generated on `{r} Sys.Date()`.
+
+## About the data
+Navigate to this dataset BGchem2008data.csv by Craig Tweedie that is published on the Arctic Data Center. Craig Tweedie. 2009. North Pole Environmental Observatory Bottle Chemistry. Arctic Data Center. doi:10.18739/A25T3FZ8X.
+
+# Setup
+
+```{r load packages}
+#| warning: false
+#| message: false
+library(here)
+library(readr)
+
+```
+
+```{r}
+#| message: false
+bg_chem <- read_csv(here::here("data/BGchem2008data.csv"))
+
+```
+
+# Analysis
+
+## Summary Statistics
+
+```{r}
+#| eval: false
+#| echo: false
+colnames(bg_chem)
+str(bg_chem)
+head(bg_chem)
+summary(bg_chem)
+```
+
+```{r}
+nitrate <- mean(bg_chem$NO3)
+nitrite <- mean(bg_chem$NO2)
+amm     <- mean(bg_chem$NH4)
+phos    <- mean(bg_chem$P)
+```
+
+## Redfield Ratio
+
+```{r}
+ratio <- (nitrate + nitrite + amm) / phos
+```
+
+The Redfield ratio for this dataset is approximately `{r} round(ratio)`.
+
+## Plot
+
+```{r}
+plot(bg_chem$P, bg_chem$NO2 + bg_chem$NO3 + bg_chem$NH4)
+```
+
+# Conclusion
+
+This is the end.
