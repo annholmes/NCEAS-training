@@ -145,6 +145,7 @@ head(sites_df)
 #### Split site by the dash between the site letters and its code
 
 ```{r}
+#| label: split data
 sites_df %>%
     tidyr::separate_wider_delim(cols = site, delim = "-",
         names = c("island", "site_number"), cols_remove = FALSE)
