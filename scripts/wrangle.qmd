@@ -1,0 +1,151 @@
+---
+title: "Data wrangling"
+format: html
+engine: knitr
+---
+# Clean and wrangle data
+
+## Setup
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+```
+
+## Source data
+
+### Read data
+
+```{r}
+catch_original <- readr::read_csv(file = "https://knb.ecoinformatics.org/knb/d1/mn/v2/object/df35b.302.1")
+```
+
+```{r}
+colnames(catch_original)
+head(catch_original)
+summary(catch_original)
+```
+
+## Clean and reshape data
+
+```{r}
+catch_data <- catch_original %>%
+    dplyr::select(Region, Year, Chinook, Sockeye, Coho, Pink, Chum)
+head(catch_data)
+dplyr::glimpse(catch_data)
+```
+
+### Change column from character to numeric
+
+```{r}
+# Make the Chinook column numeric
+catch_clean <- catch_data %>%
+    dplyr::mutate(Chinook = as.numeric(Chinook))
+```
+
+### Check for NAs
+```{r}
+(i <- which(is.na(catch_clean$Chinook)))
+catch_data[i, ]
+```
+
+### Use a conditional to fix the bad value, then make the column numeric and check result
+```{r}
+catch_clean <- catch_data %>%
+    dplyr::mutate(
+        Chinook = dplyr::if_else(condition = Chinook == "I", 
+            true = "1",
+            false = Chinook),
+        Chinook = as.numeric(Chinook))
+
+catch_clean[i, ]
+```
+
+### Change shape of data to suit our needs
+#### Pivot all columns except Region and Year into long format, and check result
+
+```{r}
+catch_long <- catch_clean %>% 
+    tidyr::pivot_longer(cols = -c(Region, Year),
+        names_to = "species",
+        values_to = "catch_thousands")
+head(catch_long)
+```
+
+#### Pivot the data back into wide format
+```{r}
+catch_wide <- catch_long %>%
+    tidyr::pivot_wider(names_from = species,
+        values_from = catch_thousands,
+        values_fill = 0)
+head(catch_wide)
+```
+
+### Convert to fish numbers
+
+#### Convert to actual fish numbers, then remove the superseded column of catch in thousands
+
+##### Advice: don't reuse an object name like this ⚠️⚠️⚠️ (could use catch_long_v2)
+
+```{r}
+catch_long <- catch_long %>%
+    dplyr::mutate(catch = catch_thousands * 1000) %>% 
+    dplyr::select(-catch_thousands)
+dplyr::glimpse(catch_long)
+head(catch_long)
+```
+## Summarize data
+
+### Calculate summary statistics
+
+#### Group by region, then calculate averages within the established groups
+```{r}
+mean_region <- catch_long %>%
+    dplyr::group_by(Region) %>%
+    dplyr::summarize(mean_catch = mean(catch, na.rm = TRUE), #removes NA before taking mean
+        .groups = "drop")
+
+dplyr::glimpse(mean_region)
+head(mean_region)
+```
+
+#### Limit catch to the SSE region and check result
+
+```{r}
+sse_catch <- catch_long %>%
+    dplyr::filter(Region == "COP")
+
+unique(sse_catch$Region)
+
+head(sse_catch)
+```
+
+#### Now arrange mean_catch column by descending value
+
+```{r}
+mean_region <- catch_long %>%
+    group_by(Region) %>%
+    summarize(mean_catch = mean(catch, na.rm = TRUE), #removes NA before taking mean
+        .groups = "drop")%>%
+    arrange(desc(mean_catch))
+
+dplyr::glimpse(mean_region)
+head(mean_region)
+```
+
+### As an example, split single columnsingle column into numerous columns (not catch data)
+
+```{r}
+sites_df <- data.frame(site = c("HAW-101", "HAW-103", "OAH-320", "OAH-219", "MAU-039"))
+
+head(sites_df)
+```
+
+#### Split site by the dash between the site letters and its code
+
+```{r}
+sites_df %>%
+    tidyr::separate_wider_delim(cols = site, delim = "-",
+        names = c("island", "site_number"), cols_remove = FALSE)
+```
