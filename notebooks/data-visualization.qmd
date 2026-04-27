@@ -14,8 +14,10 @@ library(forcats)
 library(janitor)
 #data viz
 library(ggplot2)
-#and interactive out
+#and interactive plot and webpage
 library(plotly)
+library(DT)
+library(leaflet)
 ```
 
 ## Load data
@@ -188,4 +190,29 @@ facet_plot
 ## Create an interactive plot
 ```{r}
 ggplotly(facet_plot, tooltip = c('x', 'y'))
+```
+
+## Show interactive table
+```{r}
+delta_visits_raw <- read_csv(here("data/Socioecological_monitoring_data.csv"),
+                             show_col_types = FALSE)
+
+daily_visits_loc <- delta_visits_raw %>%
+  janitor::clean_names() %>%
+  tidyr::pivot_longer(
+    cols      = c(sm_boat, med_boat, lrg_boat, bank_angler, scientist, cars),
+    names_to  = "visitor_type",
+    values_to = "quantity"
+  ) %>%
+  dplyr::rename(restore_loc = eco_restore_approximate_location) %>%
+  dplyr::select(-notes) %>%
+  dplyr::group_by(restore_loc, date, visitor_type) %>%
+  dplyr::summarize(daily_visits = sum(quantity), .groups = "drop")
+
+DT::datatable(
+  daily_visits_loc,
+  caption  = "Daily visitor counts at Delta restoration sites",
+  colnames = c("Location", "Date", "Visitor type", "Daily visits"),
+  options  = list(pageLength = 10)
+)
 ```
