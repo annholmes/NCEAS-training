@@ -20,14 +20,10 @@ library(plotly)
 
 ## Load data
 ```{r}
-#| #read using direct link
+#| label: read using direct link
 download.file("https://tinyurl.com/delta-activities", destfile = "data/Socioecological_monitoring_data.csv")
-delta_visits_raw <- read_csv(here("data/https://tinyurl.com/delta-activities"))
-```
+delta_visits_raw <- read_csv(here("data/Socioecological_monitoring_data.csv"))
 
-```{r}
-#| #read using direct link
-delta_visits_raw <- read_csv("https://tinyurl.com/delta-activities")
 ```
 
 ## Explore data
