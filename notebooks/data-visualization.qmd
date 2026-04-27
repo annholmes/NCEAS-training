@@ -1,0 +1,123 @@
+---
+title: "Data Visualization"
+format: html
+---
+
+## Load packages
+```{r}
+#| label: load packages for data wrangling
+library(readr)
+library(here)
+library(dplyr)
+library(tidyr)
+library(forcats)
+library(janitor)
+#data viz
+library(ggplot2)
+#and interactive out
+library(plotly)
+```
+
+## Load data
+```{r}
+:| #read using direct link
+delta_visits_raw <- read_csv("https://tinyurl.com/delta-activities")
+```
+
+## Explore data
+```{r}
+#| label: look at data
+#Get column names
+colnames(delta_visits_raw)
+
+#peek at each column and class
+glimpse(delta_visits_raw)
+
+#from when to when
+range(delta_visits_raw$Date)
+
+#which time of day?
+unique(delta_visits_raw$Time_of_Day)
+colnames(delta_visits_raw)
+```
+
+## Clean up the data
+```{r}
+delta_visits <- delta_visits_raw %>%
+    janitor::clean_names()
+colnames(delta_visits)[1:6]
+```
+
+## Reshape to tidy (long) format
+```{r}
+visits_long <- delta_visits %>%
+  tidyr::pivot_longer(
+    cols = c(sm_boat, med_boat, lrg_boat, bank_angler, scientist, cars),
+    names_to = "visitor_type",
+    values_to = "quantity"
+  ) %>%
+  ### shorten the long name:
+  dplyr::rename(restore_loc = eco_restore_approximate_location) %>%
+  ### drop the notes column:
+  dplyr::select(-notes)
+
+glimpse(visits_long)
+```
+
+## Calculate daily visits
+```{r}
+daily_visits_loc <- visits_long %>%
+    dplyr::group_by(restore_loc, date, visitor_type) %>% 
+    dplyr::summarize(daily_visits = sum(quantity), .groups = 'drop')#.groups less likely to conflict with column name in df
+    
+glimpse(daily_visits_loc)
+```
+
+## Data viz
+```{r}
+ggplot(data = daily_visits_loc,
+       mapping = aes(x = restore_loc, y = daily_visits)) +
+  geom_col() + 
+  labs(title = 'Plot title')
+```
+
+## Make plot with axes switched
+```{r}
+ggplot() +
+    geom_col(data = daily_visits_loc,
+             aes(y = restore_loc, x = daily_visits))
+```
+
+## Setting a fixed color
+```{r}
+ggplot(data = daily_visits_loc,
+       aes(x = restore_loc, y = daily_visits)) +
+  geom_col(color = 'red',
+           fill = "steelblue")
+```
+
+## Use variable type for fill
+```{r}
+ggplot(data = daily_visits_loc,
+       aes(x = restore_loc, y = daily_visits)) +
+  geom_col(aes(fill = visitor_type),
+           color = 'red')
+```
+
+
+```{r}
+daily_visits_loc %>% 
+    ggplot(aes(y = restore_loc, x = daily_visits, fill = visitor_type)) +
+  geom_col() +
+  labs(x = "Number of Visits",
+       y = "Restoration Location",
+       fill = "Visitor Type",
+       title = "Total Visits to Delta Restoration Areas by Visitor Type",
+       subtitle = "Sum of all visits July 2017 - March 2018") +
+  scale_x_continuous(breaks = seq(0, 120, 20), expand = c(0, 0)) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.ticks.y = element_blank()
+  )
+```
