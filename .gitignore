@@ -53,3 +53,10 @@ rsconnect/
 
 # ignore alaska spatial files
 data/ak_regions/
+
+#ignore some other alaska files
+ak_regions_population.dbf
+ak_regions_population.prj
+ak_regions_population.shp
+ak_regions_population.shx
+

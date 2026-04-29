@@ -131,4 +131,52 @@ pop_rgn_3338_sf <- left_join(ak_rgns_3338_sf,
 plot(pop_rgn_3338_sf["total_pop"])
 ```
 
+### Dissolving geometries
+```{r}
+pop_mgmt_3338_sf <- pop_rgn_3338_sf %>%
+    group_by(mgmt_area) %>%
+    summarize(total_pop = sum(total_pop))
+
+plot(pop_mgmt_3338_sf["total_pop"])
+```
+
+#### Save spatial object to a new file
+```{r}
+write_sf(pop_rgn_3338_sf, here("data/ak_regions_population.shp"))
+write_sf(pop_rgn_3338_sf, here("data/ak_regions_population.gpkg")) #one file and easier to untrack
+```
+
 ## Visualization
+```{r}
+ggplot(pop_rgn_3338_sf) +
+    geom_sf(aes(fill = total_pop)) + #geom_sf knows to look for a geometry column
+    labs(fill = "Total Population") +
+    scale_fill_continuous(low = "khaki", high =  "firebrick",
+                          labels = comma, name = "Population") +
+    theme_bw()
+```
+
+### Layer multiple geometries
+#### read in data on rivers to add to map
+```{r}
+rivers_3338_sf <- read_sf(here("data/ak_regions/ak_rivers_simp.shp"))
+```
+
+#### add river data to existing map
+```{r}
+ggplot() +
+    geom_sf(data = pop_rgn_3338_sf, 
+            mapping = aes(fill = total_pop)) +
+    geom_sf(data = rivers_3338_sf,
+            aes(linewidth = StrOrder),
+            color = 'blue', alpha = .5) +
+    scale_linewidth(range = c(0.05, 0.5),
+                    guide = "none") +
+    geom_sf(data = pop_3338_sf, size = 0.5, color = 'grey20') +
+    labs(title = "Total Population by Alaska Region",
+         fill = "Total Population") +
+    scale_fill_continuous(low = "khaki",
+                          high =  "firebrick",
+                          labels = comma) +
+    theme_bw() 
+```
