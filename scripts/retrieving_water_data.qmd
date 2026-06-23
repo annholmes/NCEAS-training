@@ -146,6 +146,29 @@ wq <- readWQPdata(
 
 ## Your turn
 ```{r}
+#| label: get discharge data
+#Temperature vs. discharge: Retrieve both daily mean temperature (00010) and daily mean discharge (00060) at Freeport. Make a scatter plot. Is there a clear relationship? What might you look at next?
+freeport_dis_file <- "data/freeport_dis.rds"
+
+if (!file.exists(freeport_temp_file)) {
+  message("Fetching daily temperature from USGS...")
+  freeport_dis <- read_waterdata_daily(
+    monitoring_location_id = "USGS-11447650",  # note "USGS-" prefix
+    parameter_code = "72137",  # tidally filtered discharge
+    statistic_id = "00003",  # daily mean
+    time = c("2020-01-01", "2023-12-31")
+  )
+  dir.create("data", showWarnings = FALSE)
+  saveRDS(freeport_temp, freeport_temp_file)
+} else {
+  freeport_temp <- readRDS(freeport_temp_file)
+}
+
+glimpse(freeport_temp)
+```
+
+## Branch test
+```{r}
 #| label: get sediment data
 #Temperature vs. discharge: Retrieve both daily mean temperature (00010) and daily mean discharge (00060) at Freeport. Make a scatter plot. Is there a clear relationship? What might you look at next?
 freeport_dis_file <- "data/freeport_dis.rds"
