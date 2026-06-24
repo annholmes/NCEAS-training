@@ -1,0 +1,121 @@
+---
+title: "Delta Fish Monitoring"
+format:
+  dashboard:
+    theme: cosmo
+---
+
+```{r}
+#| label: load packages
+
+library(readr)
+library(dplyr)
+library(lubridate)
+library(plotly)
+library(DT)
+```
+
+```{r}
+#| label: load data
+
+# Set paths
+yolo_catch_url <- "https://pasta.lternet.edu/package/data/eml/edi/233/2/015e494911cf35c90089ced5a3127334"
+data_dir <- "data"
+yolo_catch_file <- file.path(data_dir, "yolo_catch.csv")
+
+# Download data if not already cached
+if (!file.exists(yolo_catch_file)) {
+  message("Downloading file...")
+  dir.create(data_dir, showWarnings = FALSE, recursive = TRUE)
+  download.file(
+    url = yolo_catch_url,
+    destfile = yolo_catch_file
+  )
+  message("Saved to: ", yolo_catch_file)
+} else {
+  message("Using cached file.")
+}
+
+# Load the (locally cached) data
+fish <- read_csv(yolo_catch_file, guess_max = 100000) %>%
+  mutate(SampleDate = mdy(SampleDate)) %>%
+  filter(grepl("Salmon|Striped Bass|Smelt|Sturgeon", CommonName))
+```
+
+# Summary
+
+## Row {height="25%"}
+
+```{r}
+#| content: valuebox
+#| title: "Species Monitored"
+list(icon = "binoculars", color = "primary",
+     value = n_distinct(fish$CommonName))
+```
+
+```{r}
+#| content: valuebox
+#| title: "Years of Data"
+list(icon = "calendar3", color = "success",
+     value = n_distinct(year(fish$SampleDate)))
+```
+
+```{r}
+#| content: valuebox
+#| title: "Total Observations"
+list(icon = "table", color = "info",
+     value = nrow(fish))
+```
+
+## Row {height="75%"}
+
+```{r}
+#| title: "Water Clarity Over Time"
+p <- fish %>%
+  ggplot(aes(x = SampleDate, y = Secchi)) +
+    geom_point(color = "#2C7BB6", alpha = 0.4) +
+    labs(x = "Date", y = "Secchi depth (m)") +
+    theme_light()
+
+ggplotly(p)
+```
+
+```{r}
+#| title: "Catch by Species"
+fish %>%
+  group_by(CommonName) %>%
+  summarize(
+    Observations = n(),
+    `Total Catch` = sum(Count, na.rm = TRUE),
+    `Avg Secchi (m)` = round(mean(Secchi, na.rm = TRUE), 2)
+  ) %>%
+  datatable(rownames = FALSE, options = list(pageLength = 5))
+```
+
+# Catch Trends
+
+## Row {.tabset}
+
+```{r}
+#| title: "By Year"
+annual_catch <- fish %>%
+  mutate(Year = year(SampleDate)) %>%
+  group_by(Year, CommonName) %>%
+  summarize(total_catch = sum(Count, na.rm = TRUE), .groups = "drop")
+
+p2 <- annual_catch %>%
+  ggplot(aes(x = Year, y = total_catch, color = CommonName)) +
+    geom_line() +
+    geom_point() +
+    labs(x = "Year", y = "Total Catch", color = "Species") +
+    theme_light()
+
+ggplotly(p2)
+```
+
+```{r}
+#| title: "Raw Data"
+fish %>%
+  select(SampleDate, CommonName, Count, Secchi) %>%
+  datatable(rownames = FALSE)
+```
