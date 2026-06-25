@@ -1,0 +1,136 @@
+---
+title: "Geospatial Raster Analysis"
+format: html
+---
+
+# Geospatial Raster Analysis
+
+## set up
+```{r}
+#| label: load packages
+library(dplyr)     
+library(tidyr)
+library(ggplot2)
+### spatial data packages:
+library(terra)     ### for working with raster spatial data
+library(sf)        ### for working with vector spatial data
+### for easy relative file paths:
+library(here)   
+```
+
+```{r}
+#| label: LandSat data set
+# Download this LandSat sample data - note the file format is .tif, i.e., a GeoTIFF. Right click on the link, choose “Save link as…”, and save it to your data folder in your current repository as landsat71.tif.
+
+#from gridded file format
+landsat_r <- terra::rast(here('data/landsat71.tif'))
+
+#inspect parameters (not named landsat_from_tif)
+landsat_r
+
+#plot the layers
+plot(landsat_r)
+
+#from X-Y coords
+ls_green_df <- readr::read_csv(here('data/landsat71_band2.csv')) #values are zero (no green) to 255 (all green)
+
+ls_green_from_csv <- terra::rast(ls_green_df) #looks for first 2 cols to be X and Y
+ls_green_from_csv #no CRS (it came with the tif)
+#update the coord ref syst (CRS) using the EPSG code based on the GeoTIFF version
+crs(ls_green_from_csv) <- 'epsg:3310' #add CRS
+ls_green_from_csv #inspect again, CRS is there
+plot(ls_green_from_csv) #1 plot instead of 5
+```
+
+```{r}
+#Download this GeoPackage of Santa Barbara County - note the file format is .gpkg, i.e., vector data like .shp - and save it to your data folder in your current repository as sb_county.gpkg
+
+sb_county_sf <- sf::read_sf(here('data/sb_county.gpkg'))
+
+terra::same.crs(sb_county_sf, landsat_r)  ### Check that CRS are equal!
+
+#rasterize vector data (convert polygons and points into raster version that uses numbers)
+sb_county_r <- terra::rasterize(x = sb_county_sf,
+                                y = landsat_r,
+                                field = 'OBJECTID')
+
+plot(sb_county_r) #outline of just the land of the county
+
+```
+
+```{r}
+#create a raster from scratch
+### create the blank template
+cellid_r <- rast(xmin = -180, xmax = 180, ymin = -90, ymax = 90,
+                 resolution = 0.5,
+                 crs = 'EPSG:4326') %>%
+  setNames('cell_id')
+
+### set values directly
+values(cellid_r) <- 1:ncell(cellid_r)
+
+plot(cellid_r)
+```
+
+## basic raster math
+```{r}
+### operating on a vector
+vec <- 1:10
+vec * 2  ### multiply by a scalar
+
+vec + 20 ### add a scalar
+
+log(vec) ### transform with a function
+
+### subset raster using $ or [] notation:
+ls_red <- landsat_r$landsat71_3    ### band 3 is red
+ls_nir <- landsat_r['landsat71_4'] ### band 4 is near IR
+
+plot(ls_red + 100) ### note color ramp number changed; you would never need to add 100, just a demo
+
+plot(log(ls_red))  ### looks way different!
+```
+
+```{r}
+nir_low <- ls_nir ### make a copy
+nir_low[nir_low > 30] <- NA ### any NIR value > 30, set to NA
+plot(nir_low)
+#picks up on values that show water
+
+red_hi <- ls_red ### make a copy
+red_hi[red_hi < ls_nir] <- NA ### if red < NIR, set to NA
+plot(red_hi)
+#compares areas where nir is higher than red
+```
+
+```{r}
+#| label: calculate an index (NDVI) using the raster numbers
+# Healthy plants absorb visible red light for photosynthesis but strongly reflect near-infrared (NIR) light
+ndvi_all <- (ls_nir - ls_red) / (ls_nir + ls_red) ### does a calculation for each raster cell
+plot(ndvi_all)
+
+ndvi <- ndvi_all * sb_county_r
+
+names(ndvi) <- 'ndvi'
+
+plot(ndvi)
+
+veg <-ndvi_all
+veg[veg<0.2] <- NA
+plot(veg) #shows were there is veg in SB county based on raster math
+
+min(veg,na.rm=TRUE) #min across different layers
+min(landsat_r,na.rm=TRUE) #min across different layers
+```
+
+```{r}
+#| label: summarization functions
+max_by_pixel <- max(landsat_r)  ### max pixel value across multiple bands
+plot(max_by_pixel)
+```
+
+```{r}
+ndvi_26986 <- project(x = ndvi, y = 'epsg:26986', res = 2000, method = 'bilinear')
+plot(ndvi_26986)
+plot(ndvi)
+```
