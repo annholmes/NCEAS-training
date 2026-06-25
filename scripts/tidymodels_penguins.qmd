@@ -1,0 +1,199 @@
+---
+title: "Untitled"
+format: html
+---
+
+# tidymodels lesson
+
+## set up
+```{r}
+#| label: load libraries
+library(dplyr)
+library(tidyverse)
+library(tidymodels) 
+library(palmerpenguins)
+library(ranger)
+library(kernlab)
+library(parsnip)
+```
+
+## data wrangling
+```{r}
+#| label: clean data
+penguins_clean <- penguins %>%
+  drop_na() %>%
+  ### convert characters to factors - generally easier for modeling engines!
+  mutate(species = factor(species), sex = factor(sex), island = factor(island))
+
+table(penguins_clean$sex)
+
+table(penguins_clean$species)
+```
+
+```{r}
+#| label: manually partition data
+set.seed(42)
+peng_split <- initial_split(penguins_clean, prop = 0.85, strata = species)
+peng_train_df <- training(peng_split)
+peng_test_df  <- testing(peng_split)
+# table(peng_test_df$species) / nrow(peng_test_df); table(peng_train_df$species) / nrow(peng_train_df)
+# #    Adelie Chinstrap    Gentoo;      Adelie Chinstrap    Gentoo
+# # 0.4313725 0.2156863 0.3529412;   0.4397163 0.2021277 0.3581560
+
+# table(peng_test_df$sex) / nrow(peng_test_df); table(peng_train_df$sex) / nrow(peng_train_df)
+# #    female      male;      female      male
+# # 0.6078431 0.3921569;   0.4751773 0.5248227 
+
+peng_train_split <- initial_split(peng_train_df, prop = 70/85, strata = sex)
+peng_analysis <- training(peng_train_split)
+peng_assess   <- testing(peng_train_split)
+```
+
+## data analysis
+```{r}
+blr_mdl <- parsnip::logistic_reg() %>%
+  parsnip::set_engine('glm') ### this is the default - we could try engines from other packages or functions
+
+peng_fit1 <- blr_mdl %>%
+  ### Specify a model with all biometric predictor variables
+  parsnip::fit(sex ~ species + bill_length_mm + bill_depth_mm + flipper_length_mm + body_mass_g, 
+               data = peng_analysis) #trained on peng_analysis df
+
+peng_fit2 <- blr_mdl %>%
+  ### Specify a model with a sub set of biometric predictor variables
+  fit(sex ~ species + bill_length_mm + bill_depth_mm, 
+      data = peng_analysis)
+
+### let's also create a model we know will be bad:
+peng_fit3 <- blr_mdl %>%
+  ### Specify a model with predictors that are likely low value
+  fit(sex ~ species + island + year, data = peng_analysis)
+
+broom::tidy(peng_fit1)
+broom::tidy(peng_fit2)
+broom::tidy(peng_fit3)
+
+```
+
+```{r}
+#| label: assess model performance
+peng_pred1 <- peng_assess %>%
+  mutate(predict(peng_fit1, new_data = ., type = 'class'))
+peng_pred3 <- peng_assess %>%
+  mutate(predict(peng_fit3, new_data = ., type = 'class'))
+
+peng_pred1 %>% select(sex, .pred_class) %>% table()
+peng_pred3 %>% select(sex, .pred_class) %>% table()
+
+peng_train_folds <- vfold_cv(peng_train_df, v = 5, repeats = 3)
+```
+
+```{r}
+blr_mdl <-logistic_reg() %>%
+    set_engine('glm')
+
+blr_wf <- workflows::workflow() %>%   ### initialize workflow
+  workflows::add_model(blr_mdl) %>% #workflows is from tidymodels
+  workflows::add_formula(sex ~ species + bill_length_mm + bill_depth_mm) #suite of predictor variables
+    
+```
+
+```{r}
+blr_fit_folds <- blr_wf %>%
+  tune::fit_resamples(peng_train_folds) #tune is from tidymodels
+
+### Report out the predictive performance across the five folds:
+tune::collect_metrics(blr_fit_folds)
+```
+
+## model selection
+```{r}
+#| label: define model specifications
+spec1 <- sex ~ species + bill_length_mm + bill_depth_mm + flipper_length_mm + body_mass_g
+spec2 <- sex ~ species + bill_length_mm + bill_depth_mm
+spec3 <- sex ~ species + island + year
+```
+
+```{r}
+#| label: define model architecture
+blr_mdl <- parsnip::logistic_reg() %>%
+  parsnip::set_engine('glm')
+
+rf_mdl <- parsnip::rand_forest(trees = 1000) %>%
+  parsnip::set_engine('ranger') %>%
+  parsnip::set_mode('classification')
+  
+svm_mdl <- parsnip::svm_linear() %>%
+  parsnip::set_engine('kernlab') %>%
+  parsnip::set_mode('classification')
+
+blr_spec1 <- workflow() %>%
+  add_model(blr_mdl) %>%
+  add_formula(spec1) %>%
+  fit_resamples(peng_train_folds)
+
+blr_spec2 <- workflow() %>%
+  add_model(blr_mdl) %>%
+  add_formula(spec2) %>%
+  fit_resamples(peng_train_folds)
+
+blr_spec3 <- workflow() %>%
+  add_model(blr_mdl) %>%
+  add_formula(spec3) %>%
+  fit_resamples(peng_train_folds)
+
+collect_metrics(blr_spec1, type = 'wide')
+collect_metrics(blr_spec2, type = 'wide')
+collect_metrics(blr_spec3, type = 'wide')
+
+```
+
+```{r}
+#| label: random forest
+
+spec_list <-list(spec1, spec2, spec3)
+
+for(spec in spec_list){
+    rf_specs <-workflow() %>%
+        add_model(rf_mdl) %>%
+        add_formula(spec) %>%
+        fit_resamples(peng_train_folds)
+    results<-collect_metrics(rf_specs, type='wide')
+    print(results)
+}
+```
+
+```{r}
+#| label: support vector machines
+
+svm_specs <- purrr::map(
+  .x = spec_list,
+  .f = function(spec) {
+    mdl <- workflow() %>%
+      add_model(svm_mdl) %>%
+      add_formula(spec) %>%
+      fit_resamples(peng_train_folds)
+    
+    collect_metrics(mdl, type = 'wide')
+  })
+
+svm_specs_df <- svm_specs %>%
+  setNames(as.character(spec_list)) %>%
+  bind_rows(.id = 'model_spec')
+
+svm_specs_df
+```
+
+## final workflow
+```{r}
+#| label: use best performing model
+### the cross validation we've done helps prevent model overfitting
+### set up our final model as a workflow
+final_workflow <- workflow() %>%
+  add_model(svm_mdl) %>%
+  add_formula(spec1)    ### specification with all biometric variables
+
+final_fit <- last_fit(final_workflow, peng_split)
+
+collect_metrics(final_fit)
+```
